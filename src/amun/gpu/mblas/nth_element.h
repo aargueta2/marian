@@ -57,11 +57,16 @@ class NthElement {
                       std::vector<float>& outCosts, std::vector<uint>& outKeys,
                       const bool isFirst=false);
 
+    void getNBestList(const std::vector<uint>& beamSizes, mblas::Matrix& Probs,
+                      std::vector<float>& outCosts, std::vector<uint>& outKeys, uint custom_beam_size,
+                      const bool isFirst=false);
+
     void GetPairs(uint number,
                   std::vector<uint>& outKeys,
                   std::vector<float>& outValues);
 
     void getValueByKey(std::vector<float>& out, const mblas::Matrix &d_in) const;
+    void getValueByKey(std::vector<float>& out, const mblas::Matrix &d_in, uint custom_beam_size) const;
 
   private:
     const uint BLOCK_SIZE = 512;
@@ -82,6 +87,10 @@ class NthElement {
                       const HostVector<uint>& batchFirstElementIdxs,
                       const HostVector<uint>& cummulatedBeamSizes);
 
+    void getNBestList(mblas::Matrix &probs,
+                      const HostVector<uint>& batchFirstElementIdxs,
+                      const HostVector<uint>& cummulatedBeamSizes,
+                      uint custom_beam_size);
 };
 
 }  // namespace GPU

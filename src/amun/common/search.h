@@ -26,11 +26,19 @@ class Search {
     void CleanAfterTranslation();
 
     bool CalcBeam(
+                std::shared_ptr<Histories>& histories,
+                std::vector<uint>& beamSizes,
+        Beam& prevHyps,
+                States& states,
+                States& nextStates);
+
+    bool CalcBeam(
     		std::shared_ptr<Histories>& histories,
     		std::vector<uint>& beamSizes,
         Beam& prevHyps,
     		States& states,
-    		States& nextStates);
+    		States& nextStates,
+                uint selected_beam_size);
 
     Search(const Search&) = delete;
 
@@ -42,6 +50,7 @@ class Search {
     bool normalizeScore_;
     Words filterIndices_;
     BestHypsBasePtr bestHyps_;
+    uint batchSize_;
 };
 
 }

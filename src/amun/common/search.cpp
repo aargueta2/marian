@@ -5,7 +5,7 @@
 #include "common/history.h"
 #include "common/filter.h"
 #include "common/base_matrix.h"
-
+#define DEBUG 0
 using namespace std;
 
 namespace amunmt {
@@ -16,7 +16,8 @@ Search::Search(const God &god)
     filter_(god.GetFilter()),
     maxBeamSize_(god.Get<size_t>("beam-size")),
     normalizeScore_(god.Get<bool>("normalize")),
-    bestHyps_(god.GetBestHyps(deviceInfo_))
+    bestHyps_(god.GetBestHyps(deviceInfo_)),
+    batchSize_(god.Get<size_t>("mini-batch"))
 {}
 
 
@@ -42,26 +43,45 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
     FilterTargetVocab(sentences);
   }
 
+  
   States states = Encode(sentences);
   States nextStates = NewStates();
   std::vector<uint> beamSizes(sentences.size(), 1);
 
+  // If we need the default max beam size use "maxBeamSize_"
+  uint selected_beam_size = 3000;
   std::shared_ptr<Histories> histories(new Histories(sentences, normalizeScore_));
   Beam prevHyps = histories->GetFirstHyps();
 
+  //Resize the cost vector to fit the modified beam size
+  bestHyps_->resizeCosts((batchSize_ * selected_beam_size));
+
   for (size_t decoderStep = 0; decoderStep < 3 * sentences.GetMaxLength(); ++decoderStep) {
     for (size_t i = 0; i < scorers_.size(); i++) {
+
+#if DEBUG
+      std::cout << "DECODING" << std::endl;
+#endif
+
       scorers_[i]->Decode(*states[i], *nextStates[i], beamSizes);
+
+#if DEBUG
+      std::cout << "DONE DECODING" << std::endl;
+#endif
+
     }
 
     if (decoderStep == 0) {
       for (auto& beamSize : beamSizes) {
-        beamSize = maxBeamSize_;
+        beamSize = selected_beam_size; //selected_beam_size;//maxBeamSize_;
       }
     }
-    //cerr << "beamSizes=" << Debug(beamSizes, 1) << endl;
 
-    bool hasSurvivors = CalcBeam(histories, beamSizes, prevHyps, states, nextStates);
+#if DEBUG
+    cerr << "beamSizes=" << Debug(beamSizes, 1) << endl;
+#endif
+
+    bool hasSurvivors = CalcBeam(histories, beamSizes, prevHyps, states, nextStates,selected_beam_size);
     if (!hasSurvivors) {
       break;
     }
@@ -89,12 +109,77 @@ bool Search::CalcBeam(
     std::vector<uint>& beamSizes,
     Beam& prevHyps,
     States& states,
+    States& nextStates,
+    uint custom_beam_size)
+{
+    size_t batchSize = beamSizes.size();
+    Beams beams(batchSize);
+
+    bestHyps_->CalcBeam(prevHyps, scorers_, filterIndices_, beams, beamSizes,custom_beam_size);
+
+#if DEBUG
+    std::cout << "ADD BEAMS" << std::endl;
+#endif
+    histories->Add(beams);
+#if DEBUG
+    std::cout << "END ADDING BEAMS" << std::endl;
+#endif
+    Beam survivors;
+    for (size_t batchId = 0; batchId < batchSize; ++batchId) {
+      for (auto& h : beams[batchId]) {
+        if (h->GetWord() != EOS_ID) {
+          survivors.push_back(h);
+        } else {
+          survivors.push_back(h);
+          //--beamSizes[batchId];
+        }
+      }
+    }
+
+    if (survivors.size() == 0) {
+      return false;
+    }
+
+#if DEBUG
+    std::cout << "ASSEMBLE STATE" << std::endl;
+#endif
+    for (size_t i = 0; i < scorers_.size(); i++) {
+      scorers_[i]->AssembleBeamState(*nextStates[i], survivors, *states[i]);
+    }
+#if DEBUG
+    std::cout << "DONE ASSEMBLING " << std::endl;
+#endif
+    prevHyps.swap(survivors);
+#if DEBUG
+    std::cout << "RETURN " << std::endl;
+#endif
+    return true;
+}
+
+
+
+bool Search::CalcBeam(
+    std::shared_ptr<Histories>& histories,
+    std::vector<uint>& beamSizes,
+    Beam& prevHyps,
+    States& states,
     States& nextStates)
 {
     size_t batchSize = beamSizes.size();
     Beams beams(batchSize);
+
+#if DEBUG
+    std::cout << "CALL THE CALLC BEAM CODE " << std::endl;
+#endif
     bestHyps_->CalcBeam(prevHyps, scorers_, filterIndices_, beams, beamSizes);
+
+#if DEBUG
+    std::cout << "ADD BEAMS" << std::endl;
+#endif
     histories->Add(beams);
+#if DEBUG
+    std::cout << "END ADDING BEAMS" << std::endl;
+#endif
 
     Beam survivors;
     for (size_t batchId = 0; batchId < batchSize; ++batchId) {
@@ -102,6 +187,7 @@ bool Search::CalcBeam(
         if (h->GetWord() != EOS_ID) {
           survivors.push_back(h);
         } else {
+          //survivors.push_back(h);
           --beamSizes[batchId];
         }
       }
@@ -118,6 +204,7 @@ bool Search::CalcBeam(
     prevHyps.swap(survivors);
     return true;
 }
+
 
 
 States Search::NewStates() const {
