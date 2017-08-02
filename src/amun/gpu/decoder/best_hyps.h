@@ -195,17 +195,19 @@ class BestHyps : public BestHypsBase
         uint custom_beam_size)
     {
       BEGIN_TIMER("CalcBeam");
-#if DEBUG
-std::cout << "START CALC BEAM " << std::endl;
-#endif
+      #if DEBUG
+      std::cout << "START CALC BEAM " << std::endl;
+      #endif
       using namespace mblas;
-#if DEBUG
-std::cout << "GET PROBS " << std::endl;
-#endif
+
+      #if DEBUG
+      std::cout << "GET PROBS " << std::endl;
+      #endif
       mblas::Matrix& Probs = static_cast<mblas::Matrix&>(scorers[0]->GetProbs());
-#if DEBUG
-std::cout << "GET VCOSTS " << std::endl;
-#endif
+      #if DEBUG
+      std::cout << "GET VCOSTS " << std::endl;
+      #endif
+
       HostVector<float> vCosts;
       for (auto& h : prevHyps) {
         #if DEBUG
@@ -213,13 +215,16 @@ std::cout << "GET VCOSTS " << std::endl;
         #endif
         vCosts.push_back(h->GetCost());
       }
-#if DEBUG
-std::cout << "COPY COSTS " << vCosts.size() << " - " << Costs.size() << std::endl;
-#endif
+      #if DEBUG
+      std::cout << "COPY COSTS " << vCosts.size() << " - " << Costs.size() << std::endl;
+      #endif
+
+
       mblas::copy(vCosts.begin(), vCosts.end(), Costs.begin());
 #if DEBUG
 std::cout << "IS FIRST " << std::endl;
 #endif
+
       const bool isFirst = (vCosts[0] == 0.0f) ? true : false;
 #if DEBUG
 std::cout << "Get COL BY KEY " << std::endl;
@@ -246,10 +251,13 @@ std::cout << "Get DONE COL BY KEY " << std::endl;
 #if DEBUG
       std::cout << "-Get VALUE BY KEY " << std::endl;
 #endif
+
       FindBests(beamSizes, Probs, bestCosts, bestKeys, isFirst, custom_beam_size);
+
 #if DEBUG
       std::cout << "*Get VALUE BY KEY " << std::endl;
 #endif
+
       std::vector<HostVector<float>> breakDowns;
       if (returnNBestList_) {
           breakDowns.push_back(bestCosts);
@@ -285,6 +293,7 @@ std::cout << "Get DONE COL BY KEY " << std::endl;
         size_t hypIndex  = bestKeys[i] / Probs.dim(1);
         float cost = bestCosts[i];
 
+        std::cout << "Hypothesis index [" << i << "] " << hypIndex << " and cost" << cost << std::endl;
         HypothesisPtr hyp;
         if (returnAttentionWeights_) {
           hyp.reset(new Hypothesis(prevHyps[hypIndex], wordIndex, hypIndex, cost,
@@ -316,6 +325,7 @@ std::cout << "Get DONE COL BY KEY " << std::endl;
 
         beams[batchMap[i]].push_back(hyp);
       }
+      std::cout << "***********************" << std::endl;
 
       PAUSE_TIMER("CalcBeam");
     }

@@ -39,17 +39,26 @@ void Search::CleanAfterTranslation()
 std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
   boost::timer::cpu_timer timer;
 
+  size_t vocabulary_size = scorers_[0]->GetVocabSize();
+  size_t number_scorers = scorers_.size();
+  cout << "Vocab size: " << vocabulary_size << " and number of scorers: " << number_scorers << endl;
+
   if (filter_) {
     FilterTargetVocab(sentences);
   }
 
-  
+  //Encode the input sentences  
   States states = Encode(sentences);
+  //Create variable to store the next states on the generation
   States nextStates = NewStates();
+  //I think this is used to store the size of remaining elemenrs on the beam? e.g. if EOS is found
+  //in one element of the beam, then the beam size of the batch member decreases by 1
   std::vector<uint> beamSizes(sentences.size(), 1);
 
   // If we need the default max beam size use "maxBeamSize_"
-  uint selected_beam_size = 3000;
+  uint selected_beam_size = 200;
+
+  //TODO: Figure out how much memory histories and prevHyps actually consume
   std::shared_ptr<Histories> histories(new Histories(sentences, normalizeScore_));
   Beam prevHyps = histories->GetFirstHyps();
 
@@ -57,29 +66,29 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
   bestHyps_->resizeCosts((batchSize_ * selected_beam_size));
 
   for (size_t decoderStep = 0; decoderStep < 3 * sentences.GetMaxLength(); ++decoderStep) {
-    for (size_t i = 0; i < scorers_.size(); i++) {
+    for (size_t i = 0; i < scorers_.size(); i++){
 
-#if DEBUG
+      #if DEBUG
       std::cout << "DECODING" << std::endl;
-#endif
+      #endif
 
       scorers_[i]->Decode(*states[i], *nextStates[i], beamSizes);
 
-#if DEBUG
+      #if DEBUG
       std::cout << "DONE DECODING" << std::endl;
-#endif
+      #endif
 
     }
 
     if (decoderStep == 0) {
       for (auto& beamSize : beamSizes) {
-        beamSize = selected_beam_size; //selected_beam_size;//maxBeamSize_;
+        beamSize = selected_beam_size;
       }
     }
 
-#if DEBUG
+    #if DEBUG
     cerr << "beamSizes=" << Debug(beamSizes, 1) << endl;
-#endif
+    #endif
 
     bool hasSurvivors = CalcBeam(histories, beamSizes, prevHyps, states, nextStates,selected_beam_size);
     if (!hasSurvivors) {
@@ -117,16 +126,21 @@ bool Search::CalcBeam(
 
     bestHyps_->CalcBeam(prevHyps, scorers_, filterIndices_, beams, beamSizes,custom_beam_size);
 
-#if DEBUG
+    #if DEBUG
     std::cout << "ADD BEAMS" << std::endl;
-#endif
+    #endif
     histories->Add(beams);
-#if DEBUG
+    #if DEBUG
     std::cout << "END ADDING BEAMS" << std::endl;
-#endif
+    #endif
+
     Beam survivors;
     for (size_t batchId = 0; batchId < batchSize; ++batchId) {
+      int token_index = 0;
       for (auto& h : beams[batchId]) {
+
+        std::cout << "Obtained word [" << token_index << "] " << h->GetWord() << std::endl;
+        token_index++;
         if (h->GetWord() != EOS_ID) {
           survivors.push_back(h);
         } else {
@@ -136,23 +150,25 @@ bool Search::CalcBeam(
       }
     }
 
+    std::cout << "-------------" << std::endl;
+
     if (survivors.size() == 0) {
       return false;
     }
 
-#if DEBUG
+    #if DEBUG
     std::cout << "ASSEMBLE STATE" << std::endl;
-#endif
+    #endif
     for (size_t i = 0; i < scorers_.size(); i++) {
       scorers_[i]->AssembleBeamState(*nextStates[i], survivors, *states[i]);
     }
-#if DEBUG
+    #if DEBUG
     std::cout << "DONE ASSEMBLING " << std::endl;
-#endif
+    #endif
     prevHyps.swap(survivors);
-#if DEBUG
+    #if DEBUG
     std::cout << "RETURN " << std::endl;
-#endif
+    #endif
     return true;
 }
 
