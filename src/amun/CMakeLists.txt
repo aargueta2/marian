@@ -48,6 +48,7 @@ add_library(libcommon OBJECT
   common/filter.cpp
   common/god.cpp
   common/history.cpp
+  common/history_dijkstra.cpp
   common/hypothesis.cpp
   common/loader.cpp
   common/logging.cpp

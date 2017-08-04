@@ -323,7 +323,17 @@ std::cout << "Get DONE COL BY KEY " << std::endl;
           hyp->GetCostBreakdown()[0] /= weights_.at(scorers[0]->GetName());
         }
 
+/*
+        if(beams[batchMap[i]].size() > 0){
+          beams[batchMap[i]][0] = hyp;
+        }
+        else{
+          beams[batchMap[i]].push_back(hyp);
+        }
+*/
         beams[batchMap[i]].push_back(hyp);
+
+        //printf("The size of %d is %d \n",batchMap[i],beams[batchMap[i]].size());
       }
       std::cout << "***********************" << std::endl;
 

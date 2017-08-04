@@ -160,6 +160,7 @@ class TMatrix : public BaseMatrix {
     void NewSize(size_t rows, size_t cols, size_t beam = 1, size_t batches = 1) {
       size_t newSize = cols * rows * beam * batches;
       if (data_) {
+        std::cout << "Size " << newSize << " and old " << arrSize_ << std::endl;
         if (newSize > arrSize_) {
           T *newData;
           HANDLE_ERROR( cudaMalloc(&newData, newSize * sizeof(T)) );

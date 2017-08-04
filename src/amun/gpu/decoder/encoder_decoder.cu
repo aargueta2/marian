@@ -1,4 +1,3 @@
-// -*- mode: c++; tab-width: 2; indent-tabs-mode: nil -*-
 #include <iostream>
 
 #include "common/god.h"

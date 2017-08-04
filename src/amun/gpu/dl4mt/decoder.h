@@ -6,6 +6,7 @@
 #include "gpu/types-gpu.h"
 #include "common/god.h"
 
+#define DEBUG 1
 namespace amunmt {
 namespace GPU {
 
@@ -159,6 +160,7 @@ class Decoder {
           //std::cerr << "batchSize=" << batchSize << std::endl;
           //std::cerr << "HiddenState=" << HiddenState.Debug(0) << std::endl;
 
+          std::cout << "HIDDEN DIMENSION: " << HiddenState.dim(0) << std::endl;
           HostVector<uint> batchMapping(HiddenState.dim(0));
           size_t k = 0;
           for (size_t i = 0; i < beamSizes.size(); ++i) {
@@ -167,6 +169,7 @@ class Decoder {
             }
           }
 
+          std::cout << "DBATCH MAPPING SIZE: " << batchMapping.size() << std::endl;
           dBatchMapping_.resize(batchMapping.size());
           mblas::copy(thrust::raw_pointer_cast(batchMapping.data()),
               batchMapping.size(),
@@ -251,9 +254,18 @@ class Decoder {
                   const mblas::Matrix& AlignedSourceContext) {
           using namespace mblas;
 
+      #if DEBUG
+      std::cout << "PROD" << std::endl;
+      #endif
+
           BEGIN_TIMER("GetProbs.Prod");
           Prod(/*h_[0],*/ T1_, State, *w_.W1_);
           PAUSE_TIMER("GetProbs.Prod");
+
+
+      #if DEBUG
+      std::cout << "NORMALIZE AND BROAD" << std::endl;
+      #endif
 
           BEGIN_TIMER("GetProbs.Normalization/BroadcastVec");
           if (w_.Gamma_1_->size()) {
@@ -263,9 +275,17 @@ class Decoder {
           }
           PAUSE_TIMER("GetProbs.Normalization/BroadcastVec");
 
+      #if DEBUG
+      std::cout << "PROD2" << std::endl;
+      #endif
+
           BEGIN_TIMER("GetProbs.Prod2");
           Prod(/*h_[1],*/ T2_, Embedding, *w_.W2_);
           PAUSE_TIMER("GetProbs.Prod2");
+
+      #if DEBUG
+      std::cout << "NORMALIZE AND BROADCAST " << std::endl;
+      #endif
 
           BEGIN_TIMER("GetProbs.Normalization/BroadcastVec2");
           if (w_.Gamma_0_->size()) {
@@ -275,9 +295,19 @@ class Decoder {
           }
           PAUSE_TIMER("GetProbs.Normalization/BroadcastVec2");
 
+
+      #if DEBUG
+      std::cout << "PROD 3" << std::endl;
+      #endif
+
           BEGIN_TIMER("GetProbs.Prod3");
           Prod(/*h_[2],*/ T3_, AlignedSourceContext, *w_.W3_);
           PAUSE_TIMER("GetProbs.Prod3");
+
+
+      #if DEBUG
+      std::cout << "NORMALIZE AND BROADCAST " << std::endl;
+      #endif
 
           BEGIN_TIMER("GetProbs.Normalization/BroadcastVec3");
           if (w_.Gamma_2_->size()) {
@@ -286,6 +316,10 @@ class Decoder {
             BroadcastVec(_1 + _2, T3_, *w_.B3_ /*,s_[2]*/);
           }
           PAUSE_TIMER("GetProbs.Normalization/BroadcastVec3");
+
+      #if DEBUG
+      std::cout << "ELEMENT " << std::endl;
+      #endif
 
           BEGIN_TIMER("GetProbs.Element");
           Element(Tanh(_1 + _2 + _3), T1_, T2_, T3_);
@@ -300,17 +334,32 @@ class Decoder {
             b4.reset(&FilteredB4_);
           }
 
+      #if DEBUG
+      std::cout << "NEW SIZE " << std::endl;
+      #endif
+
           BEGIN_TIMER("GetProbs.NewSize");
           Probs.NewSize(T1_.dim(0), w4->dim(1));
           PAUSE_TIMER("GetProbs.NewSize");
+
+      #if DEBUG
+      std::cout << "PROD " << std::endl;
+      #endif
 
           BEGIN_TIMER("GetProbs.Prod4");
           Prod(Probs, T1_, *w4);
           PAUSE_TIMER("GetProbs.Prod4");
 
+      #if DEBUG
+      std::cout << "BROADCAST " << std::endl;
+      #endif
+
           BEGIN_TIMER("GetProbs.BroadcastVec");
           BroadcastVec(_1 + _2, Probs, *b4);
           PAUSE_TIMER("GetProbs.BroadcastVec");
+      #if DEBUG
+      std::cout << "SOFTMAX " << std::endl;
+      #endif
 
           BEGIN_TIMER("GetProbs.LogSoftMax");
           mblas::LogSoftmax(Probs);
@@ -363,23 +412,43 @@ class Decoder {
     {
       BEGIN_TIMER("Decode");
 
+      //TODO: Complete the other method
       BEGIN_TIMER("GetHiddenState");
-      //std::cerr << "State=" << State.Debug(1) << std::endl;
-      //std::cerr << "Embeddings=" << Embeddings.Debug(1) << std::endl;
+      std::cerr << "State=" << State.Debug(1) << std::endl;
+      std::cerr << "Embeddings=" << Embeddings.Debug(1) << std::endl;
+      std::cerr << "SourceContext=" << Embeddings.Debug(1) << std::endl;
+      std::cerr << "sentencesMask=" << Embeddings.Debug(1) << std::endl;
+
+      #if DEBUG
+      std::cout << "GET HIDDEN STATE" << std::endl;
+      #endif
+
       GetHiddenState(HiddenState_, State, Embeddings);
       //HiddenState_.ReduceDimensions();
       //std::cerr << "HiddenState_=" << HiddenState_.Debug(1) << std::endl;
       PAUSE_TIMER("GetHiddenState");
 
       BEGIN_TIMER("GetAlignedSourceContext");
+
+      #if DEBUG
+      std::cout << "GET ALIGNED SOURCE CONTEXT" << std::endl;
+      #endif
+
       GetAlignedSourceContext(AlignedSourceContext_, HiddenState_, SourceContext, sentencesMask, beamSizes);
-      //std::cerr << "AlignedSourceContext_=" << AlignedSourceContext_.Debug(1) << std::endl;
       PAUSE_TIMER("GetAlignedSourceContext");
+
+      #if DEBUG
+      std::cout << "GET NEXT STATE" << std::endl;
+      #endif
 
       BEGIN_TIMER("GetNextState");
       GetNextState(NextState, HiddenState_, AlignedSourceContext_);
       //std::cerr << "NextState=" << NextState.Debug(1) << std::endl;
       PAUSE_TIMER("GetNextState");
+
+      #if DEBUG
+      std::cout << "GET PROBS" << std::endl;
+      #endif
 
       BEGIN_TIMER("GetProbs");
       GetProbs(NextState, Embeddings, AlignedSourceContext_);
@@ -387,6 +456,17 @@ class Decoder {
       PAUSE_TIMER("GetProbs");
 
       PAUSE_TIMER("Decode");
+    }
+
+    void Decode(mblas::Matrix& NextState,
+                  const mblas::Matrix& State,
+                  const mblas::Matrix& Embeddings,
+                  const mblas::Matrix& SourceContext,
+                  const mblas::IMatrix &sentencesMask,
+                  const std::vector<uint>& beamSizes,
+                  int dim_index)
+    {
+      //TODO: Implement method
     }
 
     mblas::Matrix& GetProbs() {

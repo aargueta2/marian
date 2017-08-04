@@ -5,7 +5,17 @@
 #include "common/history.h"
 #include "common/filter.h"
 #include "common/base_matrix.h"
-#define DEBUG 0
+#include "common/history_dijkstra.h"
+
+/*
+#include "gpu/decoder/encoder_decoder.h"
+#include "gpu/mblas/matrix_functions.h"
+#include "gpu/dl4mt/dl4mt.h"
+#include "gpu/decoder/encoder_decoder_state.h"
+#include "gpu/decoder/best_hyps.h"
+*/
+
+#define DEBUG 1
 using namespace std;
 
 namespace amunmt {
@@ -54,9 +64,8 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
   //I think this is used to store the size of remaining elemenrs on the beam? e.g. if EOS is found
   //in one element of the beam, then the beam size of the batch member decreases by 1
   std::vector<uint> beamSizes(sentences.size(), 1);
-
   // If we need the default max beam size use "maxBeamSize_"
-  uint selected_beam_size = 200;
+  uint selected_beam_size = vocabulary_size;//200;
 
   //TODO: Figure out how much memory histories and prevHyps actually consume
   std::shared_ptr<Histories> histories(new Histories(sentences, normalizeScore_));
@@ -66,12 +75,19 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
   bestHyps_->resizeCosts((batchSize_ * selected_beam_size));
 
   for (size_t decoderStep = 0; decoderStep < 3 * sentences.GetMaxLength(); ++decoderStep) {
+
+   //TODO: Find ways to separate the *states[i].get<EDState>();
+   if(decoderStep = 0){
     for (size_t i = 0; i < scorers_.size(); i++){
 
       #if DEBUG
       std::cout << "DECODING" << std::endl;
       #endif
 
+      cout << "Size: " << states[0]->Debug(0) << " and " << nextStates[0]->Debug(0) << endl;
+      cout << "-Size: " << states[0]->Debug(1) << " and " << nextStates[0]->Debug(1) << endl;
+ 
+      //const EDState& edIn = states[i]->get<EDState>();
       scorers_[i]->Decode(*states[i], *nextStates[i], beamSizes);
 
       #if DEBUG
@@ -90,10 +106,14 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
     cerr << "beamSizes=" << Debug(beamSizes, 1) << endl;
     #endif
 
+
     bool hasSurvivors = CalcBeam(histories, beamSizes, prevHyps, states, nextStates,selected_beam_size);
+
+    printf("Done Calc Beam \n\n");
     if (!hasSurvivors) {
       break;
     }
+   }
   }
 
   CleanAfterTranslation();
@@ -129,7 +149,11 @@ bool Search::CalcBeam(
     #if DEBUG
     std::cout << "ADD BEAMS" << std::endl;
     #endif
+
+
     histories->Add(beams);
+
+
     #if DEBUG
     std::cout << "END ADDING BEAMS" << std::endl;
     #endif
@@ -162,6 +186,7 @@ bool Search::CalcBeam(
     for (size_t i = 0; i < scorers_.size(); i++) {
       scorers_[i]->AssembleBeamState(*nextStates[i], survivors, *states[i]);
     }
+
     #if DEBUG
     std::cout << "DONE ASSEMBLING " << std::endl;
     #endif
@@ -212,6 +237,7 @@ bool Search::CalcBeam(
     if (survivors.size() == 0) {
       return false;
     }
+
 
     for (size_t i = 0; i < scorers_.size(); i++) {
       scorers_[i]->AssembleBeamState(*nextStates[i], survivors, *states[i]);
