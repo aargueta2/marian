@@ -228,6 +228,21 @@ Matrix& CopyRow(Matrix& Out,
   return Out;
 }
 
+
+IMatrix& CopyRow(IMatrix& Out,
+                const IMatrix& In,
+                const size_t r, const size_t c) {
+  size_t length = In.dim(1) - c;
+  Out.NewSize(1, length);
+  size_t start = r * In.dim(1) + c;
+  //size_t end   = start + length;
+
+  //mblas::copy(In.begin() + start, In.begin() + end, Out.begin());
+  mblas::copy(In.data() + start, length , Out.data(), cudaMemcpyDeviceToDevice);
+
+  return Out;
+}
+
 __global__ void gCopyRows(MatrixWrapper<float> out,
                           const MatrixWrapper<float> in,
                           const MatrixWrapper<uint> indicesWrap)

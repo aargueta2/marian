@@ -65,7 +65,7 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
   //in one element of the beam, then the beam size of the batch member decreases by 1
   std::vector<uint> beamSizes(sentences.size(), 1);
   // If we need the default max beam size use "maxBeamSize_"
-  uint selected_beam_size = vocabulary_size;//200;
+  uint selected_beam_size = 20;//vocabulary_size;//200;
 
   //TODO: Figure out how much memory histories and prevHyps actually consume
   std::shared_ptr<Histories> histories(new Histories(sentences, normalizeScore_));
@@ -75,9 +75,10 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
   bestHyps_->resizeCosts((batchSize_ * selected_beam_size));
 
   for (size_t decoderStep = 0; decoderStep < 3 * sentences.GetMaxLength(); ++decoderStep) {
+   cout << "Decoder Step " << decoderStep << endl;
 
    //TODO: Find ways to separate the *states[i].get<EDState>();
-   if(decoderStep = 0){
+   if(decoderStep == 0){
     for (size_t i = 0; i < scorers_.size(); i++){
 
       #if DEBUG
@@ -114,6 +115,48 @@ std::shared_ptr<Histories> Search::Translate(const Sentences& sentences) {
       break;
     }
    }
+   else{
+
+
+
+
+for (size_t i = 0; i < scorers_.size(); i++){
+
+      #if DEBUG
+      std::cout << "DECODING" << std::endl;
+      #endif
+
+      cout << "Size: " << states[0]->Debug(0) << " and " << nextStates[0]->Debug(0) << endl;
+      cout << "-Size: " << states[0]->Debug(1) << " and " << nextStates[0]->Debug(1) << endl;
+ 
+      //for(int test = 0;test < selected_beam_size; test++){
+        std::cout << "TEST " << std::endl;
+        scorers_[i]->Decode(*states[i], *nextStates[i], beamSizes,0);//test);
+      //}
+
+      #if DEBUG
+      std::cout << "DONE DECODING" << std::endl;
+      #endif
+
+    }
+
+
+
+    bool hasSurvivors = CalcBeam(histories, beamSizes, prevHyps, states, nextStates,selected_beam_size);
+
+    printf("Done Calc Beam \n\n");
+    if (!hasSurvivors) {
+      break;
+    }
+
+
+
+   }
+
+
+
+
+
   }
 
   CleanAfterTranslation();

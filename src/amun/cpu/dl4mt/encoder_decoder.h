@@ -35,6 +35,12 @@ class EncoderDecoder : public CPUEncoderDecoderBase {
         State& out,
         const std::vector<uint>& beamSizes);
 
+    virtual void Decode(
+        const State& in,
+        State& out,
+        const std::vector<uint>& beamSizes,
+        int dim);
+
     virtual void BeginSentenceState(State& state, size_t batchSize);
 
     virtual void Encode(const Sentences& sources);

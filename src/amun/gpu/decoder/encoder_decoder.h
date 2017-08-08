@@ -35,6 +35,8 @@ class EncoderDecoder : public Scorer {
 
     virtual void Decode(const State& in, State& out, const std::vector<uint>& beamSizes);
 
+    virtual void Decode(const State& in, State& out, const std::vector<uint>& beamSizes, int dim_index);
+
     virtual State* NewState() const;
 
     virtual void BeginSentenceState(State& state, size_t batchSize=1);

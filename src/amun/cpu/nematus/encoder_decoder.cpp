@@ -37,6 +37,14 @@ void EncoderDecoder::Decode(const State& in, State& out, const std::vector<uint>
                    edIn.GetEmbeddings(), SourceContext_);
 }
 
+void EncoderDecoder::Decode(const State& in, State& out, const std::vector<uint>&, int dim) {
+  const EDState& edIn = in.get<EDState>();
+  EDState& edOut = out.get<EDState>();
+
+  decoder_->Decode(edOut.GetStates(), edIn.GetStates(),
+                   edIn.GetEmbeddings(), SourceContext_);
+}
+
 
 void EncoderDecoder::BeginSentenceState(State& state, size_t batchSize) {
   EDState& edState = state.get<EDState>();

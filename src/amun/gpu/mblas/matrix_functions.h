@@ -124,6 +124,11 @@ Matrix& CopyRow(Matrix& Out,
                 const size_t r = 0,
                 const size_t c = 0);
 
+IMatrix& CopyRow(IMatrix& Out,
+                const IMatrix& In,
+                const size_t r = 0, 
+                const size_t c = 0);
+
 Matrix& Concat(Matrix& Out, const Matrix& In);
 
 void MapMatrix(Matrix& state,

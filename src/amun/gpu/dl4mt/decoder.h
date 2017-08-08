@@ -144,6 +144,7 @@ class Decoder {
           }
         }
 
+
         void GetAlignedSourceContext(mblas::Matrix& AlignedSourceContext,
                                      const mblas::Matrix& HiddenState,
                                      const mblas::Matrix& SourceContext,
@@ -160,7 +161,6 @@ class Decoder {
           //std::cerr << "batchSize=" << batchSize << std::endl;
           //std::cerr << "HiddenState=" << HiddenState.Debug(0) << std::endl;
 
-          std::cout << "HIDDEN DIMENSION: " << HiddenState.dim(0) << std::endl;
           HostVector<uint> batchMapping(HiddenState.dim(0));
           size_t k = 0;
           for (size_t i = 0; i < beamSizes.size(); ++i) {
@@ -169,41 +169,52 @@ class Decoder {
             }
           }
 
-          std::cout << "DBATCH MAPPING SIZE: " << batchMapping.size() << std::endl;
           dBatchMapping_.resize(batchMapping.size());
+          std::cout << "RESIZE " << std::endl;
           mblas::copy(thrust::raw_pointer_cast(batchMapping.data()),
               batchMapping.size(),
               thrust::raw_pointer_cast(dBatchMapping_.data()),
               cudaMemcpyHostToDevice);
+          std::cout << "RESIZE DONE " << std::endl;
+
           //std::cerr << "mapping=" << Debug(mapping, 2) << std::endl;
           //std::cerr << "batchMapping=" << Debug(batchMapping, 2) << std::endl;
           //std::cerr << "dBatchMapping_=" << Debug(dBatchMapping_, 2) << std::endl;
 
           const size_t srcSize = sentencesMask.size() / beamSizes.size();
 
+          std::cout << "PROD " << std::endl;
           Prod(/*h_[1],*/ Temp2_, HiddenState, *w_.W_);
           //std::cerr << "1Temp2_=" << Temp2_.Debug() << std::endl;
+          std::cout << "PROD DONE " << std::endl;
 
           if (w_.Gamma_2_->size()) {
             Normalization(Temp2_, Temp2_, *w_.Gamma_2_, 1e-9);
           } else {
             BroadcastVec(_1 + _2, Temp2_, *w_.B_/*, s_[1]*/);
           }
+          std::cout << "NORMALIZE DONE " << std::endl;
           //std::cerr << "2Temp2_=" << Temp2_.Debug() << std::endl;
 
           Copy(Temp1_, SCU_);
           //std::cerr << "1Temp1_=" << Temp1_.Debug() << std::endl;
+          std::cout << "COPY DONE " << std::endl;
 
           Broadcast(Tanh(_1 + _2), Temp1_, Temp2_, dBatchMapping_, srcSize);
 
+          std::cout << "BROADCAST DONE " << std::endl;
           //std::cerr << "w_.V_=" << w_.V_->Debug(0) << std::endl;
           //std::cerr << "3Temp1_=" << Temp1_.Debug(0) << std::endl;
 
           Prod(A_, *w_.V_, Temp1_, false, true);
+          std::cout << "PROD DONE " << std::endl;
 
           mblas::Softmax(A_, dBatchMapping_, sentencesMask, batchSize);
+          
+          std::cout << "SOFTMAX DONE " << std::endl;
           mblas::WeightedMean(AlignedSourceContext, A_, SourceContext, dBatchMapping_);
 
+          std::cout << "RETURN " << std::endl;
           /*
           std::cerr << "AlignedSourceContext=" << AlignedSourceContext.Debug() << std::endl;
           std::cerr << "A_=" << A_.Debug() << std::endl;
@@ -412,6 +423,42 @@ class Decoder {
     {
       BEGIN_TIMER("Decode");
 
+      BEGIN_TIMER("GetHiddenState");
+      //std::cerr << "State=" << State.Debug(1) << std::endl;
+      //std::cerr << "Embeddings=" << Embeddings.Debug(1) << std::endl;
+      GetHiddenState(HiddenState_, State, Embeddings);
+      //HiddenState_.ReduceDimensions();
+      //std::cerr << "HiddenState_=" << HiddenState_.Debug(1) << std::endl;
+      PAUSE_TIMER("GetHiddenState");
+
+      BEGIN_TIMER("GetAlignedSourceContext");
+      GetAlignedSourceContext(AlignedSourceContext_, HiddenState_, SourceContext, sentencesMask, beamSizes);
+      //std::cerr << "AlignedSourceContext_=" << AlignedSourceContext_.Debug(1) << std::endl;
+      PAUSE_TIMER("GetAlignedSourceContext");
+
+      BEGIN_TIMER("GetNextState");
+      GetNextState(NextState, HiddenState_, AlignedSourceContext_);
+      //std::cerr << "NextState=" << NextState.Debug(1) << std::endl;
+      PAUSE_TIMER("GetNextState");
+
+      BEGIN_TIMER("GetProbs");
+      GetProbs(NextState, Embeddings, AlignedSourceContext_);
+      //std::cerr << "Probs_=" << Probs_.Debug(1) << std::endl;
+      PAUSE_TIMER("GetProbs");
+
+      PAUSE_TIMER("Decode");
+    }
+
+/*
+    void Decode(mblas::Matrix& NextState,
+                  const mblas::Matrix& State,
+                  const mblas::Matrix& Embeddings,
+                  const mblas::Matrix& SourceContext,
+                  const mblas::IMatrix &sentencesMask,
+                  const std::vector<uint>& beamSizes)
+    {
+      BEGIN_TIMER("Decode");
+
       //TODO: Complete the other method
       BEGIN_TIMER("GetHiddenState");
       std::cerr << "State=" << State.Debug(1) << std::endl;
@@ -457,7 +504,7 @@ class Decoder {
 
       PAUSE_TIMER("Decode");
     }
-
+*/
     void Decode(mblas::Matrix& NextState,
                   const mblas::Matrix& State,
                   const mblas::Matrix& Embeddings,
@@ -466,7 +513,84 @@ class Decoder {
                   const std::vector<uint>& beamSizes,
                   int dim_index)
     {
-      //TODO: Implement method
+      BEGIN_TIMER("Decode");
+
+
+      // START SLICING THE INPUT MATRICES
+      size_t zero_arg = 0;
+      size_t row_arg = dim_index;
+
+      mblas::Matrix Sliced_NextState(1,NextState.dim(1),1,1);
+      CopyRow(Sliced_NextState, NextState, row_arg, zero_arg);
+
+      mblas::Matrix Sliced_State(1,State.dim(1),1,1);
+      CopyRow(Sliced_State, State, row_arg, zero_arg);
+      
+      mblas::Matrix Sliced_Embeddings(1,Embeddings.dim(1),1,1);
+      CopyRow(Sliced_Embeddings, Embeddings, row_arg, zero_arg);
+
+      mblas::Matrix Sliced_SourceContext(1,SourceContext.dim(1),1,1);
+      CopyRow(Sliced_SourceContext,SourceContext, row_arg, zero_arg);
+
+      mblas::IMatrix Sliced_sentencesMask(1,sentencesMask.dim(1),1,1);
+      CopyRow(Sliced_sentencesMask, sentencesMask, row_arg, zero_arg);
+
+      mblas::Matrix Sliced_AlignedSourceContext(1,AlignedSourceContext_.dim(1),1,1);
+      CopyRow(Sliced_AlignedSourceContext,AlignedSourceContext_,row_arg, zero_arg);
+
+      mblas::Matrix Sliced_HiddenState(1,HiddenState_.dim(1),1,1);
+      CopyRow(Sliced_HiddenState,HiddenState_,row_arg, zero_arg);
+      //DONE SLICING THE MATRICES
+
+
+
+
+      //TODO: Complete the other method
+      BEGIN_TIMER("GetHiddenState");
+      std::cerr << "State=" << State.Debug(1) << std::endl;
+      std::cerr << "Embeddings=" << Embeddings.Debug(1) << std::endl;
+      std::cerr << "SourceContext=" << Embeddings.Debug(1) << std::endl;
+      std::cerr << "sentencesMask=" << Embeddings.Debug(1) << std::endl;
+
+      #if DEBUG
+      std::cout << "GET HIDDEN STATE" << std::endl;
+      #endif
+
+      GetHiddenState(Sliced_HiddenState, Sliced_State, Sliced_Embeddings);
+      //HiddenState_.ReduceDimensions();
+      //std::cerr << "HiddenState_=" << HiddenState_.Debug(1) << std::endl;
+      PAUSE_TIMER("GetHiddenState");
+
+      BEGIN_TIMER("GetAlignedSourceContext");
+
+      #if DEBUG
+      std::cout << "GET ALIGNED SOURCE CONTEXT" << std::endl;
+      #endif
+
+      GetAlignedSourceContext(Sliced_AlignedSourceContext, Sliced_HiddenState, Sliced_SourceContext, Sliced_sentencesMask, beamSizes);
+      std::cout << "Done" << std::endl;
+      PAUSE_TIMER("GetAlignedSourceContext");
+
+      #if DEBUG
+      std::cout << "GET NEXT STATE" << std::endl;
+      #endif
+
+      BEGIN_TIMER("GetNextState");
+      GetNextState(Sliced_NextState, Sliced_HiddenState, Sliced_AlignedSourceContext);
+      //std::cerr << "NextState=" << NextState.Debug(1) << std::endl;
+      PAUSE_TIMER("GetNextState");
+
+      #if DEBUG
+      std::cout << "GET PROBS" << std::endl;
+      #endif
+
+      BEGIN_TIMER("GetProbs");
+      GetProbs(Sliced_NextState, Sliced_Embeddings, Sliced_AlignedSourceContext);
+      //std::cerr << "Probs_=" << Probs_.Debug(1) << std::endl;
+      PAUSE_TIMER("GetProbs");
+
+      PAUSE_TIMER("Decode");
+
     }
 
     mblas::Matrix& GetProbs() {

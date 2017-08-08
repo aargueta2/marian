@@ -33,12 +33,31 @@ void EncoderDecoder::Decode(const State& in, State& out, const std::vector<uint>
   const EDState& edIn = in.get<EDState>();
   EDState& edOut = out.get<EDState>();
 
+  std::cout << "Start Regular " << std::endl;
   decoder_->Decode(edOut.GetStates(),
                      edIn.GetStates(),
                      edIn.GetEmbeddings(),
                      *SourceContext_,
                      sentencesMask_,
                      beamSizes);
+
+  PAUSE_TIMER("Decode");
+}
+
+
+void EncoderDecoder::Decode(const State& in, State& out, const std::vector<uint>& beamSizes, int dim_index) {
+  BEGIN_TIMER("Decode");
+  const EDState& edIn = in.get<EDState>();
+  EDState& edOut = out.get<EDState>();
+
+  decoder_->Decode(edOut.GetStates(),
+                     edIn.GetStates(),
+                     edIn.GetEmbeddings(),
+                     *SourceContext_,
+                     sentencesMask_,
+                     beamSizes,
+                     dim_index);
+
   PAUSE_TIMER("Decode");
 }
 
